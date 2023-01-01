@@ -1453,6 +1453,11 @@ class AppWidgetServiceImpl extends IAppWidgetService.Stub implements WidgetBacku
         // Make sure the package runs under the caller uid.
         mSecurityPolicy.enforceCallFromPackage(callingPackage);
 
+        if (!isUserRunningAndUnlocked(userId)) {
+            Slog.w(TAG, "stopListening() should not be called for locked user " + userId);
+            return;
+        }
+
         synchronized (mLock) {
             ensureGroupStateLoadedLocked(userId, /* enforceUserUnlockingOrUnlocked */ false);
 
@@ -1534,6 +1539,11 @@ class AppWidgetServiceImpl extends IAppWidgetService.Stub implements WidgetBacku
         final int userId = UserHandle.getCallingUserId();
 
         mSecurityPolicy.enforceCallFromPackage(callingPackage);
+
+        if (!isUserRunningAndUnlocked(userId)) {
+            Slog.w(TAG, "setAppWidgetHidden() should not be called for locked user " + userId);
+            return;
+        }
 
         synchronized (mLock) {
             ensureGroupStateLoadedLocked(userId, /* enforceUserUnlockingOrUnlocked */false);
@@ -4191,21 +4201,32 @@ class AppWidgetServiceImpl extends IAppWidgetService.Stub implements WidgetBacku
             // provide widgets.
             flags |= PackageManager.MATCH_DEBUG_TRIAGED_MISSING;
 
-            // Widget hosts that are non-crypto aware may be hosting widgets
-            // from a profile that is still locked, so let them see those
-            // widgets.
-            if (isProfileWithUnlockedParent(userId)) {
-                flags |= PackageManager.MATCH_DIRECT_BOOT_AWARE
-                        | PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
-            }
+            // Let's see all the apps, both boot-aware and boot-unaware in case we initialize before
+            // boot is complete.
+            flags |=
+                    PackageManager.MATCH_DIRECT_BOOT_AWARE
+                            | PackageManager.MATCH_DIRECT_BOOT_UNAWARE;
 
             // Widgets referencing shared libraries need to have their
             // dependencies loaded.
             flags |= PackageManager.GET_SHARED_LIBRARY_FILES;
 
-            return mPackageManager.queryIntentReceivers(intent,
-                    intent.resolveTypeIfNeeded(mContext.getContentResolver()),
-                    flags, userId).getList();
+            List<ResolveInfo> receivers =
+                    mPackageManager
+                            .queryIntentReceivers(
+                                    intent,
+                                    intent.resolveTypeIfNeeded(mContext.getContentResolver()),
+                                    flags,
+                                    userId)
+                            .getList();
+            Slog.i(
+                    TAG,
+                    "queryIntentReceivers for user "
+                            + userId
+                            + " found: "
+                            + receivers.size()
+                            + " receivers.");
+            return receivers;
         } catch (RemoteException re) {
             Slog.w(TAG, "Failed to query intent receivers for user " + userId, re);
             return null;
@@ -4238,6 +4259,7 @@ class AppWidgetServiceImpl extends IAppWidgetService.Stub implements WidgetBacku
             Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
 
             final int N = mProviders.size();
+            Slog.i(TAG, "handleUserUnlocked: " + userId + " mProviders size: " + N);
             for (int i = 0; i < N; i++) {
                 Provider provider = mProviders.get(i);
 
