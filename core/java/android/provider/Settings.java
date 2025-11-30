@@ -6991,6 +6991,12 @@ public final class Settings {
         public static final String QS_BRIGHTNESS_SLIDER_ROUND = "qs_brightness_slider_round";
 
         /**
+         * Whether Quick Settings uses a single unified tone (hiding notification scrim).
+         * @hide
+         */
+        public static final String SINGLE_QS_TONE_ENABLED = "single_qs_tone_enabled";
+
+        /**
          * Whether Quick Settings tiles use circular/pill-shaped corners.
          * @hide
          */

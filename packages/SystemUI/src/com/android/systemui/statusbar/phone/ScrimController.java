@@ -32,8 +32,11 @@ import android.animation.ValueAnimator;
 import android.annotation.IntDef;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.database.ContentObserver;
 import android.graphics.Color;
 import android.os.Handler;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.util.Log;
 import android.util.MathUtils;
 import android.util.Pair;
@@ -472,6 +475,16 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
                 .getBoolean(R.bool.notification_scrim_transparent);
         updateScrims();
         mKeyguardUpdateMonitor.registerCallback(mKeyguardVisibilityCallback);
+        mContext.getContentResolver().registerContentObserver(
+                Settings.System.getUriFor(Settings.System.SINGLE_QS_TONE_ENABLED),
+                false,
+                new ContentObserver(mHandler) {
+                    @Override
+                    public void onChange(boolean selfChange) {
+                        onThemeChanged();
+                    }
+                },
+                UserHandle.USER_ALL);
 
         // prepare() sets proper initial values for most states
         for (ScrimState state : ScrimState.values()) {
@@ -1692,6 +1705,9 @@ public class ScrimController implements ViewTreeObserver.OnPreDrawListener, Dump
 
     private void onThemeChanged() {
         updateThemeColors();
+        if (mViewsAttached) {
+            applyState();
+        }
         scheduleUpdate();
     }
 

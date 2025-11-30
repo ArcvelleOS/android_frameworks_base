@@ -281,6 +281,7 @@ public class SystemSettingsValidators {
         VALIDATORS.put(System.QS_SHOW_BRIGHTNESS, new InclusiveIntegerRangeValidator(0, 2));
         VALIDATORS.put(System.QS_BRIGHTNESS_POSITION_BOTTOM, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.QS_BRIGHTNESS_SLIDER_ROUND, BOOLEAN_VALIDATOR);
+        VALIDATORS.put(System.SINGLE_QS_TONE_ENABLED, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.QS_TILES_CIRCULAR, BOOLEAN_VALIDATOR);
         VALIDATORS.put(System.QS_TILES_CIRCULAR_SIZE,
                 new InclusiveIntegerRangeValidator(72, 80));

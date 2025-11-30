@@ -17,6 +17,9 @@
 package com.android.systemui.shade.ui
 
 import android.content.Context
+import android.graphics.Color
+import android.os.UserHandle
+import android.provider.Settings
 import com.android.internal.graphics.ColorUtils
 import com.android.systemui.res.R
 
@@ -94,13 +97,29 @@ object ShadeColors {
         return ColorUtils.compositeColors(layerAbove, layerBelow)
     }
 
+    private fun isSingleQsToneEnabled(context: Context): Boolean {
+        return Settings.System.getIntForUser(
+            context.contentResolver,
+            Settings.System.SINGLE_QS_TONE_ENABLED,
+            0,
+            UserHandle.USER_CURRENT,
+        ) == 1
+    }
+
     @JvmStatic
     private fun shadePanelFallback(context: Context): Int {
-        return context.getColor(R.color.shade_panel_fallback)
+        return if (isSingleQsToneEnabled(context)) {
+            context.getColor(R.color.single_tone_shade_panel_fallback)
+        } else {
+            context.getColor(R.color.shade_panel_fallback)
+        }
     }
 
     @JvmStatic
     private fun notificationScrimStandard(context: Context): Int {
+        if (isSingleQsToneEnabled(context)) {
+            return Color.TRANSPARENT
+        }
         return ColorUtils.setAlphaComponent(
             context.getColor(R.color.notification_scrim_base),
             (0.5f * 255).toInt(),
@@ -109,6 +128,21 @@ object ShadeColors {
 
     @JvmStatic
     private fun notificationScrimFallback(context: Context): Int {
-        return context.getColor(R.color.notification_scrim_fallback)
+        return if (isSingleQsToneEnabled(context)) {
+            context.getColor(R.color.single_tone_shade_panel_fallback)
+        } else {
+            context.getColor(R.color.notification_scrim_fallback)
+        }
+    }
+
+    @JvmStatic
+    fun opaqueNotificationBackground(context: Context): Int {
+        val container = context.getColor(com.android.internal.R.color.materialColorSurfaceContainer)
+        // Pure Black uses a black container, which disappears against a black shade.
+        return if (container == Color.BLACK) {
+            context.getColor(com.android.internal.R.color.materialColorSurfaceContainerHigh)
+        } else {
+            container
+        }
     }
 }
