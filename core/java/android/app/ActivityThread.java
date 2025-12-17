@@ -266,6 +266,7 @@ import com.android.internal.util.android.FontController;
 import com.android.internal.util.ArrayUtils;
 import com.android.internal.util.FastPrintWriter;
 import com.android.internal.util.Preconditions;
+import com.android.internal.util.custom.GameDeviceIdentitySpoof;
 import com.android.internal.util.function.pooled.PooledLambda;
 import com.android.org.conscrypt.TrustedCertificateStore;
 import com.android.server.am.BitmapDumpProto;
@@ -8215,6 +8216,12 @@ public final class ActivityThread extends ClientTransactionHandler
         final IActivityManager mgr = ActivityManager.getService();
         final ContextImpl appContext = ContextImpl.createAppContext(this, data.info);
         mConfigurationController.updateLocaleListFromAppContext(appContext);
+
+        // Apply a selected game device profile before application code and providers run.
+        if (!Process.isIsolated() && data.appInfo.category == ApplicationInfo.CATEGORY_GAME) {
+            GameDeviceIdentitySpoof.apply(appContext, data.appInfo.packageName,
+                    UserHandle.myUserId());
+        }
 
         // Initialize the default http proxy in this process.
         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "Setup proxies");
