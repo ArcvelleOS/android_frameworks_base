@@ -1,4 +1,5 @@
 /*
+ * SPDX-FileCopyrightText: 2026 kenway214
  * SPDX-License-Identifier: Apache-2.0
  */
 package com.android.internal.util.custom;
@@ -43,6 +44,7 @@ public final class GameDeviceIdentitySpoof {
             final JSONObject customProfile = profiles.optJSONObject(packageName);
             if (customProfile != null) {
                 applyCustomProfile(customProfile);
+                Log.d(TAG, "Applied custom game identity for " + packageName);
                 return;
             }
 
@@ -60,9 +62,48 @@ public final class GameDeviceIdentitySpoof {
                 case "pixel_9_pro":
                     applyProfile("google", "Google", "Pixel 9 Pro", "caiman");
                     break;
-                default:
+                // Device identities adapted from PenguinOS's PerAppsPropsUtils catalogue.
+                // Built-ins retain the running build's fingerprint, as the existing Pixels do.
+                case "pixel_10_pro_xl":
+                    applyProfile("google", "Google", "Pixel 10 Pro XL", "mustang");
                     break;
+                case "asus_rog_6d_ultimate":
+                    applyProfile("asus", "asus", "ASUS_AI2203_D", "AI2203", "AI2203");
+                    break;
+                case "asus_rog_8_pro":
+                    applyProfile("asus", "asus", "ASUS_AI2401_D", "AI2401", "AI2401");
+                    break;
+                case "asus_rog_9_pro":
+                    applyProfile("asus", "asus", "ASUS_AI2501", "AI2501", "AI2501");
+                    break;
+                case "oneplus_8_pro":
+                    applyProfile("OnePlus", "OnePlus", "IN2023", "OnePlus8Pro", "OnePlus8Pro");
+                    break;
+                case "oneplus_12":
+                    applyProfile("OnePlus", "OnePlus", "CPH2581", "OP594DL1", "OP594DL1");
+                    break;
+                case "oneplus_13":
+                    applyProfile("OnePlus", "OnePlus", "PJZ110", "PJZ110", "PJZ110");
+                    break;
+                case "redmagic_9_pro":
+                    applyProfile("nubia", "nubia", "REDMAGIC 9 Pro", "NX769J", "NX769J");
+                    break;
+                case "redmagic_10_pro":
+                    applyProfile("nubia", "nubia", "REDMAGIC 10 Pro", "NX789J", "NX789J");
+                    break;
+                case "redmagic_11_pro":
+                    applyProfile("REDMAGIC", "Nubia", "REDMAGIC 11 PRO", "NX809J", "NX809J");
+                    break;
+                case "galaxy_s25_ultra":
+                    applyProfile("samsung", "samsung", "SM-S938B", "e3q", "e3qxxx");
+                    break;
+                case "poco_f5":
+                    applyProfile("Xiaomi", "Xiaomi", "23049PCD8G", "marble");
+                    break;
+                default:
+                    return;
             }
+            Log.d(TAG, "Applied game identity profile '" + profile + "' for " + packageName);
         } catch (Exception e) {
             Log.w(TAG, "Unable to apply game identity for " + packageName, e);
         }
@@ -79,11 +120,18 @@ public final class GameDeviceIdentitySpoof {
 
     private static void applyProfile(String brand, String manufacturer, String model,
             String device) {
+        applyProfile(brand, manufacturer, model, device, device);
+    }
+
+    private static void applyProfile(String brand, String manufacturer, String model,
+            String device, String product) {
         setBuildField("BRAND", brand);
         setBuildField("MANUFACTURER", manufacturer);
         setBuildField("MODEL", model);
         setBuildField("DEVICE", device);
-        setBuildField("PRODUCT", device);
+        if (product != null) {
+            setBuildField("PRODUCT", product);
+        }
     }
 
     private static void setBuildField(String name, String value) {
