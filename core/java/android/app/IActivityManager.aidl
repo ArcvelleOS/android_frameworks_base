@@ -1077,6 +1077,7 @@ interface IActivityManager {
      */
     boolean shouldForceCutoutFullscreen(in String packageName);
     String getSpoofPifConfig();
+    String getSpoofPifSpoofPhotos();
     String getSpoofGamePropsConfig();
     String getSpoofTrickyStoreTarget();
     String getSpoofTrickyStoreKeyBox();
