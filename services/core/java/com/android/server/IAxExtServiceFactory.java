@@ -18,15 +18,7 @@ package com.android.server;
 import com.android.server.am.*;
 
 public interface IAxExtServiceFactory {
-    enum ExtType {
-        private final Class<?> clazz;
-
-        ExtType(Class<?> clazz) {
-            this.clazz = clazz;
-        }
-
-        public Class<?> getClazz() {
-            return clazz;
-        }
+    static void initObscuraService() {
+        com.android.server.obscura.ObscuraService.systemReady();
     }
 }
