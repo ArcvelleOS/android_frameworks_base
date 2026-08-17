@@ -18,6 +18,7 @@ package com.android.server.appwidget;
 
 import static android.appwidget.AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL;
 import static android.appwidget.flags.Flags.appLockWidgetRemoval;
+import static android.appwidget.flags.Flags.deleteWidgetSkipNullUpdate;
 import static android.appwidget.flags.Flags.remoteAdapterConversion;
 import static android.appwidget.flags.Flags.remoteViewsProto;
 import static android.appwidget.flags.Flags.securityPolicyInteractAcrossUsers;
@@ -3683,8 +3684,13 @@ class AppWidgetServiceImpl extends IAppWidgetService.Stub implements WidgetBacku
             if (userId == UserHandle.USER_ALL
                     || userId == widget.host.getUserId()) {
                 provider.widgets.remove(i);
-                // Call back with empty RemoteViews
-                updateAppWidgetInstanceLocked(widget, null, false);
+                if (deleteWidgetSkipNullUpdate()) {
+                    widget.views = null;
+                    widget.maskedViews = null;
+                } else {
+                    // Call back with empty RemoteViews
+                    updateAppWidgetInstanceLocked(widget, null, false);
+                }
                 // clear out references to this appWidgetId
                 widget.host.widgets.remove(widget);
                 removeWidgetLocked(widget, true);

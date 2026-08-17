@@ -31,6 +31,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -72,6 +73,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.os.UserHandle;
+import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.util.ArraySet;
@@ -89,6 +91,7 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.frameworks.servicestests.R;
 import com.android.internal.appwidget.IAppWidgetHost;
 import com.android.internal.content.PackageMonitor;
+import com.android.internal.os.BackgroundThread;
 import com.android.modules.utils.TypedXmlPullParser;
 import com.android.modules.utils.TypedXmlSerializer;
 import com.android.server.LocalServices;
@@ -122,6 +125,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Tests for {@link AppWidgetManager} and {@link AppWidgetServiceImpl}.
@@ -903,6 +907,88 @@ public class AppWidgetServiceImplTest {
         latch = new CountDownLatch(1);
         mService.getServiceThread().getThreadHandler().post(latch::countDown);
         latch.await();
+    }
+
+    private void flushBackgroundThread() throws Exception {
+        final CountDownLatch latch = new CountDownLatch(1);
+        Handler handler = new Handler(BackgroundThread.get().getLooper());
+        handler.post(latch::countDown);
+        if (!latch.await(10, TimeUnit.SECONDS)) {
+            throw new TimeoutException("BackgroundThread timed out");
+        }
+    }
+
+    private void flushServiceThread() throws Exception {
+        final CountDownLatch latch = new CountDownLatch(1);
+        Handler handler = mService.getServiceThread().getThreadHandler();
+        handler.post(latch::countDown);
+        if (!latch.await(10, TimeUnit.SECONDS)) {
+            throw new TimeoutException("ServiceThread timed out");
+        }
+    }
+
+    @Test
+    @DisableFlags(Flags.FLAG_DELETE_WIDGET_SKIP_NULL_UPDATE)
+    public void testDeleteWidgets_flagDisabled_sendsNullUpdateAndRemoved() throws Exception {
+        int widgetId = setupHostAndWidget();
+        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
+        mManager.updateAppWidget(widgetId, view);
+        flushMainThread();
+        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
+
+        int userId = mTestContext.getUserId();
+        PackageMonitor packageMonitor = mService.mPackageMonitor;
+        Field userIdField = PackageMonitor.class.getDeclaredField("mChangeUserId");
+        userIdField.setAccessible(true);
+        userIdField.set(packageMonitor, userId);
+
+        doReturn(true).when(mSpiedPackageManager).isPackageAppLockEnabled(eq(mPkgName));
+        Handler handler = mService.mServiceThread.getThreadHandler();
+        CountDownLatch latch = new CountDownLatch(1);
+        handler.post(
+                () -> {
+                    packageMonitor.onPackageAppLockEnabled(mPkgName);
+                    latch.countDown();
+                });
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        flushBackgroundThread();
+        flushServiceThread();
+        flushMainThread();
+
+        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), isNull());
+        verify(mMockHost, times(1)).appWidgetRemoved(eq(widgetId));
+    }
+
+    @Test
+    @EnableFlags(Flags.FLAG_DELETE_WIDGET_SKIP_NULL_UPDATE)
+    public void testDeleteWidgets_flagEnabled_skipsNullUpdate() throws Exception {
+        int widgetId = setupHostAndWidget();
+        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
+        mManager.updateAppWidget(widgetId, view);
+        flushMainThread();
+        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
+
+        int userId = mTestContext.getUserId();
+        PackageMonitor packageMonitor = mService.mPackageMonitor;
+        Field userIdField = PackageMonitor.class.getDeclaredField("mChangeUserId");
+        userIdField.setAccessible(true);
+        userIdField.set(packageMonitor, userId);
+
+        doReturn(true).when(mSpiedPackageManager).isPackageAppLockEnabled(eq(mPkgName));
+        Handler handler = mService.mServiceThread.getThreadHandler();
+        CountDownLatch latch = new CountDownLatch(1);
+        handler.post(
+                () -> {
+                    packageMonitor.onPackageAppLockEnabled(mPkgName);
+                    latch.countDown();
+                });
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        flushBackgroundThread();
+        flushServiceThread();
+        flushMainThread();
+
+        verify(mMockHost, never()).updateAppWidget(eq(widgetId), isNull());
+        verify(mMockHost, times(1)).appWidgetRemoved(eq(widgetId));
     }
 
     private int getDimensionResource(int resId) {
