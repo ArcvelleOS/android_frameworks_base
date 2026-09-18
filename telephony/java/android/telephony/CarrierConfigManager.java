@@ -4203,8 +4203,9 @@ public class CarrierConfigManager {
      * @see #KEY_5G_ICON_DISPLAY_GRACE_PERIOD_STRING
      * @see #KEY_5G_ICON_DISPLAY_SECONDARY_GRACE_PERIOD_STRING
      * @see #KEY_NR_TIMERS_RESET_ON_ENDC_TO_SA_TRANSIT_BOOL
+     *
+     * @hide
      */
-    @Hide
     public static final String KEY_NR_TIMERS_RESET_ON_SA_TO_LTE_TRANSIT_BOOL =
             "nr_timers_reset_on_sa_to_lte_transit_bool";
 
