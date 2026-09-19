@@ -5578,6 +5578,13 @@ public final class Settings {
         public static final String SCREEN_BRIGHTNESS_MODE = "screen_brightness_mode";
 
         /**
+         * Whether wallpaper zoom effects are enabled. Defaults to 1 (enabled).
+         * @hide
+         */
+        @Readable
+        public static final String WALLPAPER_ZOOM_ENABLED = "wallpaper_zoom_enabled";
+
+        /**
          * Adjustment to auto-brightness to make it generally more (>0.0 <1.0)
          * or less (<0.0 >-1.0) bright.
          * @hide
