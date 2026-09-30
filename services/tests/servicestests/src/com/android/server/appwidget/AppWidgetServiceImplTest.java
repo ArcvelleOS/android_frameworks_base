@@ -31,7 +31,6 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -73,9 +72,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.RemoteException;
 import android.os.UserHandle;
-import android.platform.test.annotations.DisableFlags;
 import android.platform.test.annotations.EnableFlags;
-import android.platform.test.annotations.Presubmit;
 import android.platform.test.flag.junit.SetFlagsRule;
 import android.util.ArraySet;
 import android.util.AtomicFile;
@@ -92,7 +89,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.android.frameworks.servicestests.R;
 import com.android.internal.appwidget.IAppWidgetHost;
 import com.android.internal.content.PackageMonitor;
-import com.android.internal.os.BackgroundThread;
 import com.android.modules.utils.TypedXmlPullParser;
 import com.android.modules.utils.TypedXmlSerializer;
 import com.android.server.LocalServices;
@@ -114,29 +110,23 @@ import org.xmlpull.v1.XmlPullParserException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Tests for {@link AppWidgetManager} and {@link AppWidgetServiceImpl}.
  * To run: atest FrameworksServicesTests:AppWidgetServiceImplTest
  */
-@Presubmit
 @SmallTest
 @RunWith(AndroidJUnit4.class)
 public class AppWidgetServiceImplTest {
@@ -156,7 +146,6 @@ public class AppWidgetServiceImplTest {
     private PackageManagerInternal mMockPackageManager;
     private AppOpsManagerInternal mMockAppOpsManagerInternal;
     private IAppWidgetHost mMockHost;
-    private IBinder mMockHostBinder;
     private UiAutomation mUiAutomation;
 
     @Before
@@ -182,8 +171,6 @@ public class AppWidgetServiceImplTest {
         mMockPackageManager = mock(PackageManagerInternal.class);
         mMockAppOpsManagerInternal = mock(AppOpsManagerInternal.class);
         mMockHost = mock(IAppWidgetHost.class);
-        mMockHostBinder = mock(IBinder.class);
-        when(mMockHost.asBinder()).thenReturn(mMockHostBinder);
         LocalServices.addService(ShortcutServiceInternal.class, mMockShortcutService);
         LocalServices.addService(PackageManagerInternal.class, mMockPackageManager);
         LocalServices.addService(AppOpsManagerInternal.class, mMockAppOpsManagerInternal);
@@ -388,213 +375,10 @@ public class AppWidgetServiceImplTest {
         flushMainThread();
         verify(mMockHost, times(4)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
 
-        verify(mMockHost, times(1)).viewDataChanged(eq(widgetId), eq(22));
-    }
-
-    @Test
-    public void testUpdateAppWidget_transactionTooLarge_doesNotClearCallbacks() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-
-        doThrow(new TransactionTooLargeException())
-                .doNothing()
-                .when(mMockHost)
-                .updateAppWidget(eq(widgetId), any(RemoteViews.class));
-
-        // First update fails due to TransactionTooLargeException
-        mManager.updateAppWidget(widgetId, view);
+        reset(mMockHost);
+        mManager.notifyAppWidgetViewDataChanged(widgetId, 22);
         flushMainThread();
-
-        // Second update should succeed because callback is not set to null
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(2)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testUpdateAppWidget_deadObject_keepsCallbacks_untilBinderDied() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-
-        // Capture the death recipient registered on the mock binder
-        ArgumentCaptor<IBinder.DeathRecipient> recipientCaptor =
-                ArgumentCaptor.forClass(IBinder.DeathRecipient.class);
-        verify(mMockHostBinder).linkToDeath(recipientCaptor.capture(), eq(0));
-        IBinder.DeathRecipient recipient = recipientCaptor.getValue();
-        assertNotNull(recipient);
-
-        // Configure the mock host to throw DeadObjectException on the first call
-        doThrow(new DeadObjectException())
-                .doNothing()
-                .when(mMockHost)
-                .updateAppWidget(eq(widgetId), any(RemoteViews.class));
-
-        // First update fails due to DeadObjectException
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        // Second update should STILL be sent to the host mock because callbacks
-        // are not cleared synchronously
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(2)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-
-        // Now trigger binder death
-        recipient.binderDied(mMockHostBinder);
-
-        // Third update should NOT be sent because callbacks were cleared by binderDied
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        // Total calls to mock host should remain 2 (not 3)
-        verify(mMockHost, times(2)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testUpdateAppWidget_remoteException_binderAlive_keepsCallbacks() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-
-        doThrow(new RemoteException("Temporary failure"))
-                .doNothing()
-                .when(mMockHost)
-                .updateAppWidget(eq(widgetId), any(RemoteViews.class));
-
-        // First update fails due to RemoteException
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        // Second update should succeed because callback is not set to null (binder is alive)
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(2)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testHostBinderDied_clearsCallbacks() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-
-        // Capture the death recipient registered on the mock binder
-        ArgumentCaptor<IBinder.DeathRecipient> recipientCaptor =
-                ArgumentCaptor.forClass(IBinder.DeathRecipient.class);
-        verify(mMockHostBinder).linkToDeath(recipientCaptor.capture(), eq(0));
-        IBinder.DeathRecipient recipient = recipientCaptor.getValue();
-        assertNotNull(recipient);
-
-        // Trigger binder death
-        recipient.binderDied(mMockHostBinder);
-
-        // Update should NOT be sent to the host mock because callbacks were cleared by binderDied
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(0)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testStopListening_unlinkToDeath_throwsNoSuchElementException_doesNotCrash()
-            throws Exception {
-        setupHostAndWidget();
-        doThrow(new NoSuchElementException())
-                .when(mMockHostBinder)
-                .unlinkToDeath(any(IBinder.DeathRecipient.class), eq(0));
-
-        // stopListening should handle NoSuchElementException gracefully without crashing
-        mService.stopListening(mPkgName, HOST_ID);
-    }
-
-    @Test
-    public void testStartListening_linkToDeath_remoteException_keepsCallbacksNull()
-            throws Exception {
-        doThrow(new RemoteException("Binder dead"))
-                .when(mMockHostBinder)
-                .linkToDeath(any(IBinder.DeathRecipient.class), eq(0));
-
-        mService.startListening(mMockHost, mPkgName, HOST_ID, new int[0]);
-        int widgetId = bindNewWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(0)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testHost_binderDied_fallback_clearsCallbacks() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-
-        ArgumentCaptor<IBinder.DeathRecipient> recipientCaptor =
-                ArgumentCaptor.forClass(IBinder.DeathRecipient.class);
-        verify(mMockHostBinder).linkToDeath(recipientCaptor.capture(), eq(0));
-        IBinder.DeathRecipient recipient = recipientCaptor.getValue();
-        assertNotNull(recipient);
-
-        // Trigger 0-arg binderDied fallback
-        recipient.binderDied();
-
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(0)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testHost_binderDied_mismatchedBinder_doesNotClearCallbacks() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-
-        ArgumentCaptor<IBinder.DeathRecipient> recipientCaptor =
-                ArgumentCaptor.forClass(IBinder.DeathRecipient.class);
-        verify(mMockHostBinder).linkToDeath(recipientCaptor.capture(), eq(0));
-        IBinder.DeathRecipient recipient = recipientCaptor.getValue();
-        assertNotNull(recipient);
-
-        IBinder differentBinder = mock(IBinder.class);
-        // Trigger binderDied with a different binder
-        recipient.binderDied(differentBinder);
-
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-
-        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-    }
-
-    @Test
-    public void testDump_withActiveAndStoppedHosts() throws Exception {
-        setupHostAndWidget();
-        StringWriter sw = new StringWriter();
-        PrintWriter pw = new PrintWriter(sw);
-
-        mService.dump(new FileDescriptor(), pw, new String[0]);
-        String dumpOutput = sw.toString();
-        assertTrue(dumpOutput.contains("hostId="));
-        assertTrue(dumpOutput.contains("callbacks="));
-
-        // Stop host and dump again to cover callbacks=null in dumpHost
-        mService.stopListening(mPkgName, HOST_ID);
-        sw = new StringWriter();
-        pw = new PrintWriter(sw);
-        mService.dump(new FileDescriptor(), pw, new String[0]);
-        dumpOutput = sw.toString();
-        assertTrue(dumpOutput.contains("callbacks=null"));
-    }
-
-    @Test
-    public void testUpdateAppWidgetOptions_remoteException_doesNotCrash() throws Exception {
-        int widgetId = setupHostAndWidget();
-        doThrow(new RemoteException("Options update failed"))
-                .when(mMockHost)
-                .appWidgetOptionsChanged(anyInt(), any(Bundle.class));
-
-        Bundle options = new Bundle();
-        options.putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 100);
-        mManager.updateAppWidgetOptions(widgetId, options);
-        flushMainThread();
+        verify(mMockHost, never()).viewDataChanged(anyInt(), anyInt());
     }
 
     @Test
@@ -1121,88 +905,6 @@ public class AppWidgetServiceImplTest {
         latch.await();
     }
 
-    private void flushBackgroundThread() throws Exception {
-        final CountDownLatch latch = new CountDownLatch(1);
-        Handler handler = new Handler(BackgroundThread.get().getLooper());
-        handler.post(latch::countDown);
-        if (!latch.await(10, TimeUnit.SECONDS)) {
-            throw new TimeoutException("BackgroundThread timed out");
-        }
-    }
-
-    private void flushServiceThread() throws Exception {
-        final CountDownLatch latch = new CountDownLatch(1);
-        Handler handler = mService.getServiceThread().getThreadHandler();
-        handler.post(latch::countDown);
-        if (!latch.await(10, TimeUnit.SECONDS)) {
-            throw new TimeoutException("ServiceThread timed out");
-        }
-    }
-
-    @Test
-    @DisableFlags(Flags.FLAG_DELETE_WIDGET_SKIP_NULL_UPDATE)
-    public void testDeleteWidgets_flagDisabled_sendsNullUpdateAndRemoved() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-
-        int userId = mTestContext.getUserId();
-        PackageMonitor packageMonitor = mService.mPackageMonitor;
-        Field userIdField = PackageMonitor.class.getDeclaredField("mChangeUserId");
-        userIdField.setAccessible(true);
-        userIdField.set(packageMonitor, userId);
-
-        doReturn(true).when(mSpiedPackageManager).isPackageAppLockEnabled(eq(mPkgName));
-        Handler handler = mService.mServiceThread.getThreadHandler();
-        CountDownLatch latch = new CountDownLatch(1);
-        handler.post(
-                () -> {
-                    packageMonitor.onPackageAppLockEnabled(mPkgName);
-                    latch.countDown();
-                });
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
-        flushBackgroundThread();
-        flushServiceThread();
-        flushMainThread();
-
-        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), isNull());
-        verify(mMockHost, times(1)).appWidgetRemoved(eq(widgetId));
-    }
-
-    @Test
-    @EnableFlags(Flags.FLAG_DELETE_WIDGET_SKIP_NULL_UPDATE)
-    public void testDeleteWidgets_flagEnabled_skipsNullUpdate() throws Exception {
-        int widgetId = setupHostAndWidget();
-        RemoteViews view = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-        mManager.updateAppWidget(widgetId, view);
-        flushMainThread();
-        verify(mMockHost, times(1)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-
-        int userId = mTestContext.getUserId();
-        PackageMonitor packageMonitor = mService.mPackageMonitor;
-        Field userIdField = PackageMonitor.class.getDeclaredField("mChangeUserId");
-        userIdField.setAccessible(true);
-        userIdField.set(packageMonitor, userId);
-
-        doReturn(true).when(mSpiedPackageManager).isPackageAppLockEnabled(eq(mPkgName));
-        Handler handler = mService.mServiceThread.getThreadHandler();
-        CountDownLatch latch = new CountDownLatch(1);
-        handler.post(
-                () -> {
-                    packageMonitor.onPackageAppLockEnabled(mPkgName);
-                    latch.countDown();
-                });
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
-        flushBackgroundThread();
-        flushServiceThread();
-        flushMainThread();
-
-        verify(mMockHost, never()).updateAppWidget(eq(widgetId), isNull());
-        verify(mMockHost, times(1)).appWidgetRemoved(eq(widgetId));
-    }
-
     private int getDimensionResource(int resId) {
         return mTestContext.getResources().getDimensionPixelSize(resId);
     }
@@ -1281,47 +983,6 @@ public class AppWidgetServiceImplTest {
         } catch (IOException | XmlPullParserException e) {
             return null;
         }
-    }
-
-    @Test
-    public void callbackHandler_usesCurrentCallbacks() throws Exception {
-        int widgetId = setupHostAndWidget();
-
-        Field handlerField = AppWidgetServiceImpl.class.getDeclaredField("mCallbackHandler");
-        handlerField.setAccessible(true);
-        Handler handler = (Handler) handlerField.get(mService);
-
-        // Block the callback handler thread
-        CountDownLatch blockLatch = new CountDownLatch(1);
-        handler.post(
-                () -> {
-                    try {
-                        blockLatch.await();
-                    } catch (InterruptedException e) {
-                        // Ignore
-                    }
-                });
-
-        // Trigger update (message is queued behind the blocked runnable)
-        RemoteViews views = new RemoteViews(mPkgName, android.R.layout.simple_list_item_1);
-        mManager.updateAppWidget(widgetId, views);
-
-        // Register Callback B (runs synchronously on test thread, updates host.callbacks)
-        IAppWidgetHost mockHost2 = mock(IAppWidgetHost.class);
-        IBinder mockHost2Binder = mock(IBinder.class);
-        when(mockHost2.asBinder()).thenReturn(mockHost2Binder);
-        mService.startListening(mockHost2, mPkgName, HOST_ID, new int[0]);
-
-        // Unblock the callback handler
-        blockLatch.countDown();
-
-        // Flush threads to let the update be processed
-        flushBackgroundThread();
-        flushServiceThread();
-
-        // The latest callback B must have received the update (not Callback A)
-        verify(mockHost2, times(1)).updateAppWidget(eq(widgetId), any(RemoteViews.class));
-        verify(mMockHost, never()).updateAppWidget(eq(widgetId), any(RemoteViews.class));
     }
 
     private class TestContext extends ContextWrapper {

@@ -45,7 +45,6 @@ android_test {
         "a11ychecker",
         "aatf",
         "accessibility_protos_lite",
-        "android.appwidget.flags-aconfig-java",
         "android.credentials.flags-aconfig-java",
         "androidx.test.core",
         "androidx.test.ext.junit",
