@@ -8218,7 +8218,7 @@ public final class ActivityThread extends ClientTransactionHandler
         mConfigurationController.updateLocaleListFromAppContext(appContext);
 
         // Apply a selected game device profile before application code and providers run.
-        if (!Process.isIsolated() && data.appInfo.category == ApplicationInfo.CATEGORY_GAME) {
+        if (!Process.isIsolated()) {
             GameDeviceIdentitySpoof.apply(appContext, data.appInfo.packageName,
                     UserHandle.myUserId());
         }
