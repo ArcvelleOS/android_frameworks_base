@@ -5882,8 +5882,12 @@ public class AudioService extends IAudioService.Stub
     private static final int UPDATE_CONTEXTUAL_VOLUME_DELAY_MS = 500;
 
     /*package*/ void postUpdateContextualVolumes() {
+        postUpdateContextualVolumes(UPDATE_CONTEXTUAL_VOLUME_DELAY_MS);
+    }
+
+    /*package*/ void postUpdateContextualVolumes(int delayMs) {
         sendMsg(mAudioHandler, MSG_UPDATE_CONTEXTUAL_VOLUMES, SENDMSG_REPLACE,
-                /*arg1*/ 0, /*arg2*/ 0, TAG, UPDATE_CONTEXTUAL_VOLUME_DELAY_MS);
+                /*arg1*/ 0, /*arg2*/ 0, TAG, delayMs);
     }
 
     private void onUpdateContextualVolumes() {
@@ -9832,6 +9836,7 @@ public class AudioService extends IAudioService.Stub
                         newDevice, AudioSystem.getOutputDeviceName(newDevice)));
             }
             muteAliasStreams(AudioSystem.STREAM_MUSIC, false);
+            postUpdateContextualVolumes(0);
         }
     }
 
@@ -12396,6 +12401,9 @@ public class AudioService extends IAudioService.Stub
         if (updateDeviceVolume) {
             sendMsg(mAudioHandler, MSG_SET_DEVICE_VOLUME, SENDMSG_QUEUE,
                     AudioSystem.DEVICE_OUT_BLUETOOTH_A2DP, 0, vss, 0);
+            if (support) {
+                postUpdateContextualVolumes(0);
+            }
         }
     }
 

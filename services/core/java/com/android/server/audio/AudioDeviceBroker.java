@@ -1541,6 +1541,10 @@ public class AudioDeviceBroker {
         mAudioService.postAccessoryPlugMediaUnmute(device);
     }
 
+    /*package*/ void postUpdateContextualVolumes() {
+        mAudioService.postUpdateContextualVolumes(0);
+    }
+
     /*package*/ int getVolumeForDeviceIgnoreMute(int streamType, int device) {
         return mAudioService.getVolumeForDevice(streamType, device).first;
     }
