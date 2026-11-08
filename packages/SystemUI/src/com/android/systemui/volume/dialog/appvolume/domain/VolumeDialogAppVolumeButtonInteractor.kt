@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.graphics.drawable.Drawable
 import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration.MUTED_BY_OP_CONTROL_AUDIO
+import android.media.AudioPlaybackConfiguration.PLAYER_STATE_STARTED
 import android.os.Handler
 import android.os.Looper
 import android.os.UserHandle
@@ -13,6 +15,7 @@ import com.android.systemui.dagger.qualifiers.Application
 import com.android.systemui.volume.dialog.dagger.scope.VolumeDialog
 import com.android.systemui.volume.dialog.dagger.scope.VolumeDialogScope
 import com.android.systemui.volume.dialog.domain.interactor.VolumeDialogVisibilityInteractor
+import com.android.systemui.volume.dialog.shared.model.VolumeDialogVisibilityModel
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
@@ -53,6 +56,23 @@ constructor(
     val activeAppVolumes: StateFlow<List<AppVolumeModel>> = _activeAppVolumes.asStateFlow()
     private val sessionActivePackages = mutableSetOf<String>()
     private val appInfoCache = mutableMapOf<String, Pair<String, Drawable?>>()
+    private var isDialogVisible = false
+
+    init {
+        coroutineScope.launch {
+            visibilityInteractor.dialogVisibility.collect { model ->
+                val visible = model is VolumeDialogVisibilityModel.Visible
+                isDialogVisible = visible
+                if (visible) {
+                    refreshAppVolumes()
+                } else {
+                    sessionActivePackages.clear()
+                    _isExpanded.value = false
+                    refreshAppVolumes()
+                }
+            }
+        }
+    }
 
     private fun isSettingEnabled(): Boolean {
         return Settings.System.getIntForUser(
@@ -78,6 +98,27 @@ constructor(
             .also { appInfoCache[pkg] = it }
     }
 
+    private fun getHardeningMutedPackages(): Set<String> {
+        val startedPlayersByUid =
+            audioManager.activePlaybackConfigurations
+                .filter { it.playerState == PLAYER_STATE_STARTED }
+                .groupBy { it.clientUid }
+        val mutedPackages = mutableSetOf<String>()
+        val otherPackages = mutableSetOf<String>()
+
+        for ((uid, players) in startedPlayersByUid) {
+            val packages = packageManager.getPackagesForUid(uid) ?: continue
+            val mutedByHardening = players.all { (it.mutedBy and MUTED_BY_OP_CONTROL_AUDIO) != 0 }
+            if (packages.size == 1 && mutedByHardening) {
+                mutedPackages.add(packages[0])
+            } else {
+                // Shared UIDs are ambiguous, and a package can play from multiple profiles.
+                otherPackages.addAll(packages)
+            }
+        }
+        return mutedPackages - otherPackages
+    }
+
     fun refreshAppVolumes(): Boolean {
         if (!isSettingEnabled()) {
             sessionActivePackages.clear()
@@ -87,13 +128,28 @@ constructor(
         }
         val list = mutableListOf<AppVolumeModel>()
         val seenPackages = mutableSetOf<String>()
+        val dialogVisible = isDialogVisible
+        if (!dialogVisible) {
+            sessionActivePackages.clear()
+        }
 
-        for (av in audioManager.listAppVolumes()) {
+        val appVolumes = audioManager.listAppVolumes()
+        val mutedPackages =
+            if (appVolumes.any { it.isActive } || sessionActivePackages.isNotEmpty()) {
+                getHardeningMutedPackages()
+            } else {
+                emptySet()
+            }
+        sessionActivePackages.removeAll(mutedPackages)
+
+        for (av in appVolumes) {
             val pkg = av.packageName
-            if (av.isActive) {
+            if (pkg in mutedPackages) continue
+            if (dialogVisible && av.isActive) {
                 sessionActivePackages.add(pkg)
             }
-            if ((av.isActive || sessionActivePackages.contains(pkg)) && seenPackages.add(pkg)) {
+            val isEligible = av.isActive || (dialogVisible && sessionActivePackages.contains(pkg))
+            if (isEligible && seenPackages.add(pkg)) {
                 val (label, icon) = loadLabelAndIcon(pkg) ?: continue
                 list.add(
                     AppVolumeModel(
