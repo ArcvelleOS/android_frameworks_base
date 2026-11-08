@@ -83,6 +83,13 @@ public abstract class BcSmartSpaceUtil {
             return false;
         }
         if (target != null && target.getFeatureType() == SmartspaceTarget.FEATURE_WEATHER) {
+            Intent weatherApp =
+                    view.getContext().getPackageManager().getLaunchIntentForPackage("com.google.android.apps.weather");
+            if (weatherApp != null) {
+                weatherApp.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                intentStarter.startIntent(view, weatherApp, true);
+                return true;
+            }
             Intent intent =
                     new Intent()
                             .setComponent(new ComponentName(GSA_PACKAGE, GSA_WEATHER_ACTIVITY))

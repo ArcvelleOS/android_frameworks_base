@@ -981,6 +981,14 @@ final class DefaultPermissionGrantPolicy {
         String commonServiceAction = "android.adservices.AD_SERVICES_COMMON_SERVICE";
         grantPermissionsToSystemPackage(pm, getDefaultSystemHandlerServicePackage(pm,
                         commonServiceAction, userId), userId, NOTIFICATION_PERMISSIONS);
+
+        // Smartspace & Weather
+        grantPermissionsToPackage(pm, "com.google.android.apps.weather", userId,
+                true /* ignoreSystemPackage */, true /* whitelistRestrictedPermissions */,
+                ALWAYS_LOCATION_PERMISSIONS);
+        grantPermissionsToPackage(pm, "com.google.android.as", userId,
+                true /* ignoreSystemPackage */, true /* whitelistRestrictedPermissions */,
+                ALWAYS_LOCATION_PERMISSIONS);
     }
 
     private String getDefaultSystemHandlerActivityPackageForCategory(PackageManagerWrapper pm,

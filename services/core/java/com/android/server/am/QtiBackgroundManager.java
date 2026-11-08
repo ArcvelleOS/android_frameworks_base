@@ -1542,6 +1542,12 @@ public class QtiBackgroundManager {
                 return true;
             }
 
+            if ("com.google.android.apps.weather".equals(packageName)
+                    || "com.google.android.as".equals(packageName)
+                    || "com.google.android.googlequicksearchbox".equals(packageName)) {
+                return true;
+            }
+
             try {
                 if (Settings.Global.getInt(mContentResolver,
                             SETTINGS_FREEZE_PREFIX + packageName) == FREEZE_POLICY_DISABLED) {
@@ -1565,6 +1571,12 @@ public class QtiBackgroundManager {
         }
 
         public void onPackageInstalled(String packageName) {
+            if ("com.google.android.apps.weather".equals(packageName)
+                    || "com.google.android.as".equals(packageName)
+                    || "com.google.android.googlequicksearchbox".equals(packageName)) {
+                return;
+            }
+
             try {
                 Settings.Global.putInt(mContentResolver,
                         SETTINGS_FREEZE_PREFIX + packageName, FREEZE_POLICY_ENABLED);
@@ -1913,6 +1925,12 @@ public class QtiBackgroundManager {
         private static final int HIGH_PROC_WEIGHT = 2;
 
         public void onPackageInstalled(String packageName) {
+            if ("com.google.android.apps.weather".equals(packageName)
+                    || "com.google.android.as".equals(packageName)
+                    || "com.google.android.googlequicksearchbox".equals(packageName)) {
+                return;
+            }
+
             try {
                 Settings.Global.putInt(mContentResolver,
                         SETTINGS_KEEPALIVE_PREFIX + packageName, LOW_PROC_WEIGHT);
@@ -1944,6 +1962,12 @@ public class QtiBackgroundManager {
 
             if (!isThirdPartyAppMainProcess(state)) {
                 return DEFAULT_PROC_WEIGHT;
+            }
+
+            if ("com.google.android.apps.weather".equals(app.processName)
+                    || "com.google.android.as".equals(app.processName)
+                    || "com.google.android.googlequicksearchbox".equals(app.processName)) {
+                return HIGH_PROC_WEIGHT;
             }
 
             if (mContentResolver == null) {
@@ -2076,6 +2100,12 @@ public class QtiBackgroundManager {
                 return true;
             }
 
+            if ("com.google.android.apps.weather".equals(packageName)
+                    || "com.google.android.as".equals(packageName)
+                    || "com.google.android.googlequicksearchbox".equals(packageName)) {
+                return true;
+            }
+
             try {
                 if (Settings.Global.getInt(mContentResolver,
                         SETTINGS_AUTO_START_PREFIX + packageName) == AUTO_START_POLICY_ALLOWED) {
@@ -2099,6 +2129,12 @@ public class QtiBackgroundManager {
         }
 
         public void onPackageInstalled(String packageName) {
+            if ("com.google.android.apps.weather".equals(packageName)
+                    || "com.google.android.as".equals(packageName)
+                    || "com.google.android.googlequicksearchbox".equals(packageName)) {
+                return;
+            }
+
             try {
                 Settings.Global.putInt(mContentResolver,
                         SETTINGS_AUTO_START_PREFIX + packageName, AUTO_START_POLICY_RESTRICTED);
@@ -2135,6 +2171,9 @@ public class QtiBackgroundManager {
         }
 
         public boolean shouldPreventStart(String packageName, String processName) {
+            if (isPackageExempt(packageName)) {
+                return false;
+            }
             synchronized (mLock) {
                 final Boolean isMainProcFg  = mMainProcState.get(packageName);
                 if (isMainProcFg  != null && isMainProcFg ) {
