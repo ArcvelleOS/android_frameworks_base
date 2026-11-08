@@ -29,6 +29,11 @@
     <dimen name="volume_tool_tip_top_margin">12dp</dimen>
     <dimen name="volume_row_slider_height">128dp</dimen>
 
+    <!-- Modern Volume Dialog Landscape Constraints -->
+    <dimen name="volume_dialog_slider_height">140dp</dimen>
+    <dimen name="volume_dialog_slider_vertical_margin">16dp</dimen>
+    <dimen name="volume_dialog_slider_vertical_margin_with_captions_toggle">16dp</dimen>
+
     <!-- width of ImmersiveModeConfirmation (-1 for match_parent) -->
     <dimen name="immersive_mode_cling_width">500dp</dimen>
 

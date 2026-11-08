@@ -2199,7 +2199,7 @@
     <dimen name="volume_dialog_floating_sliders_vertical_padding">10dp</dimen>
     <dimen name="volume_dialog_button_size">48dp</dimen>
     <dimen name="volume_dialog_slider_width">52dp</dimen>
-    <dimen name="volume_dialog_slider_height">254dp</dimen>
+    <dimen name="volume_dialog_slider_height">200dp</dimen>
 
     <dimen name="volume_dialog_horizontal_height">56dp</dimen>
     <dimen name="volume_dialog_horizontal_background_corner_radius">28dp</dimen>
