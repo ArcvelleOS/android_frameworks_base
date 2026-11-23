@@ -218,26 +218,32 @@ class AudioStreamInfoTest : SysuiTestCase() {
     }
 
     @Test
-    fun leAudioAndHearingAidRoutes_neverUseA2dpConfiguration() {
-        for (type in listOf(MediaRoute2Info.TYPE_BLE_HEADSET, MediaRoute2Info.TYPE_HEARING_AID)) {
-            whenever(mediaDevice.routeInfo).thenReturn(route(type))
+    fun otherLocalRoutes_showTransportWithoutAnA2dpConfiguration() {
+        val selectedDevice = mock<MediaDevice>()
+        for ((type, label) in listOf(
+            MediaRoute2Info.TYPE_BLE_HEADSET to R.string.audio_stream_info_le_audio,
+            MediaRoute2Info.TYPE_HEARING_AID to R.string.audio_stream_info_hearing_aid,
+            MediaRoute2Info.TYPE_BUILTIN_SPEAKER to R.string.audio_stream_info_builtin_audio,
+            MediaRoute2Info.TYPE_HDMI to R.string.audio_stream_info_hdmi_audio,
+        )) {
+            whenever(selectedDevice.routeInfo).thenReturn(route(type))
 
-            assertThat(AudioStreamInfo.resolve(context, bluetoothManager, mediaDevice)).isNull()
+            val info = AudioStreamInfo.resolve(context, bluetoothManager, selectedDevice)!!
+
+            assertThat(info.compactLabel).isEqualTo(context.getString(label))
+            assertThat(info.sampleRateLabel).isEqualTo(
+                context.getString(R.string.audio_stream_info_not_reported)
+            )
         }
         verify(a2dpProfile, never()).getCodecStatus(any())
     }
 
     @Test
-    fun phoneAndCastRoutes_stayCleanEvenWhenBluetoothIsConnected() {
+    fun castRoutes_stayCleanEvenWhenBluetoothIsConnected() {
         val selectedDevice = mock<MediaDevice>()
-        for (type in listOf(
-            MediaRoute2Info.TYPE_BUILTIN_SPEAKER,
-            MediaRoute2Info.TYPE_REMOTE_SPEAKER,
-        )) {
-            whenever(selectedDevice.routeInfo).thenReturn(route(type))
+        whenever(selectedDevice.routeInfo).thenReturn(route(MediaRoute2Info.TYPE_REMOTE_SPEAKER))
 
-            assertThat(AudioStreamInfo.resolve(context, bluetoothManager, selectedDevice)).isNull()
-        }
+        assertThat(AudioStreamInfo.resolve(context, bluetoothManager, selectedDevice)).isNull()
         verify(a2dpProfile, never()).getCodecStatus(any())
     }
 

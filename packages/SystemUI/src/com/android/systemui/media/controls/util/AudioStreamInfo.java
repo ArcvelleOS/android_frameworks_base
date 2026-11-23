@@ -18,7 +18,6 @@ package com.android.systemui.media.controls.util;
 
 import android.bluetooth.BluetoothCodecConfig;
 import android.bluetooth.BluetoothCodecStatus;
-import android.bluetooth.BluetoothCodecType;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
@@ -86,17 +85,26 @@ public final class AudioStreamInfo {
             case MediaRoute2Info.TYPE_USB_DEVICE:
             case MediaRoute2Info.TYPE_USB_ACCESSORY:
             case MediaRoute2Info.TYPE_USB_HEADSET:
-                return wiredInfo(context, R.string.audio_stream_info_usb_audio);
+                return transportInfo(context, R.string.audio_stream_info_usb_audio);
             case MediaRoute2Info.TYPE_WIRED_HEADSET:
             case MediaRoute2Info.TYPE_WIRED_HEADPHONES:
-                return wiredInfo(context, R.string.audio_stream_info_wired_audio);
+                return transportInfo(context, R.string.audio_stream_info_wired_audio);
+            case MediaRoute2Info.TYPE_BUILTIN_SPEAKER:
+                return transportInfo(context, R.string.audio_stream_info_builtin_audio);
+            case MediaRoute2Info.TYPE_HDMI:
+            case MediaRoute2Info.TYPE_HDMI_ARC:
+            case MediaRoute2Info.TYPE_HDMI_EARC:
+                return transportInfo(context, R.string.audio_stream_info_hdmi_audio);
+            case MediaRoute2Info.TYPE_BLE_HEADSET:
+                return transportInfo(context, R.string.audio_stream_info_le_audio);
+            case MediaRoute2Info.TYPE_HEARING_AID:
+                return transportInfo(context, R.string.audio_stream_info_hearing_aid);
             case MediaRoute2Info.TYPE_BLUETOOTH_A2DP:
                 if (device instanceof BluetoothMediaDevice && bluetoothManager != null) {
                     return bluetoothInfo(context, bluetoothManager, (BluetoothMediaDevice) device);
                 }
                 return null;
             default:
-                // A2DP codec status does not describe LE Audio, hearing aids, speakers, or casts.
                 return null;
         }
     }
@@ -131,7 +139,9 @@ public final class AudioStreamInfo {
     }
 
     private static AudioStreamInfo codecInfo(Context context, BluetoothCodecConfig config) {
-        final String codec = codecName(context, config);
+        final String reportedCodec = A2dpProfile.getReportedCodecName(context, config);
+        final String codec = reportedCodec != null ? reportedCodec
+                : context.getString(R.string.audio_stream_info_unknown_codec);
         final String rate = sampleRate(context, config.getSampleRate());
         final String depth = bitDepth(context, config.getBitsPerSample());
         String summary = codec;
@@ -158,7 +168,7 @@ public final class AudioStreamInfo {
                 context.getString(R.string.audio_stream_info_bluetooth_note));
     }
 
-    private static AudioStreamInfo wiredInfo(Context context, int labelResource) {
+    private static AudioStreamInfo transportInfo(Context context, int labelResource) {
         final String label = context.getString(labelResource);
         final String unknown = context.getString(R.string.audio_stream_info_not_reported);
         return new AudioStreamInfo(
@@ -172,66 +182,17 @@ public final class AudioStreamInfo {
                 context.getString(R.string.audio_stream_info_wired_note));
     }
 
-    private static String codecName(Context context, BluetoothCodecConfig config) {
-        final BluetoothCodecType extendedType = config.getExtendedCodecType();
-        String name = extendedType == null ? null : extendedType.getCodecName();
-        if (name == null || name.trim().isEmpty()) {
-            final BluetoothCodecType fallbackType =
-                    BluetoothCodecType.createFromType(config.getCodecType());
-            name = fallbackType == null ? null : fallbackType.getCodecName();
-        }
-        if (name == null
-                || name.trim().isEmpty()
-                || name.startsWith("UNKNOWN CODEC")
-                || "INVALID CODEC".equals(name)) {
-            return context.getString(R.string.audio_stream_info_unknown_codec);
-        }
-        return name.trim();
-    }
-
-    /** A combined bit mask denotes capabilities, not a single negotiated sample rate. */
     @Nullable
     private static String sampleRate(Context context, int value) {
-        final double rate;
-        switch (value) {
-            case BluetoothCodecConfig.SAMPLE_RATE_8000:
-                rate = 8;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_16000:
-                rate = 16;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_24000:
-                rate = 24;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_32000:
-                rate = 32;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_44100:
-                rate = 44.1;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_48000:
-                rate = 48;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_88200:
-                rate = 88.2;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_96000:
-                rate = 96;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_176400:
-                rate = 176.4;
-                break;
-            case BluetoothCodecConfig.SAMPLE_RATE_192000:
-                rate = 192;
-                break;
-            default:
-                return null;
+        final int rate = A2dpProfile.getReportedSampleRateHz(value);
+        if (rate == 0) {
+            return null;
         }
         final NumberFormat format =
                 NumberFormat.getNumberInstance(
                         context.getResources().getConfiguration().getLocales().get(0));
         format.setMaximumFractionDigits(1);
-        return context.getString(R.string.audio_stream_info_sample_rate, format.format(rate));
+        return context.getString(R.string.audio_stream_info_sample_rate, format.format(rate / 1000.0));
     }
 
     @Nullable

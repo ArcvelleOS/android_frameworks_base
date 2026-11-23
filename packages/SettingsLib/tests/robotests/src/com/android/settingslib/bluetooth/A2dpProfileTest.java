@@ -234,7 +234,7 @@ public class A2dpProfileTest {
                 .setSampleRate(BluetoothCodecConfig.SAMPLE_RATE_44100)
                 .setCodecSpecific4(0x0a05d000L)
                 .build();
-        assertThat(A2dpProfile.getAptxAdaptiveCodecSummary(
+        assertThat(A2dpProfile.getCodecSummary(
                 RuntimeEnvironment.getApplication(), config))
                 .isEqualTo("aptX Lossless • 44.1 kHz");
     }
@@ -247,7 +247,7 @@ public class A2dpProfileTest {
                     .setSampleRate(BluetoothCodecConfig.SAMPLE_RATE_44100)
                     .setCodecSpecific4(profile)
                     .build();
-            assertThat(A2dpProfile.getAptxAdaptiveCodecSummary(
+            assertThat(A2dpProfile.getCodecSummary(
                     RuntimeEnvironment.getApplication(), config))
                     .isEqualTo("aptX Adaptive • 44.1 kHz");
         }
@@ -260,20 +260,32 @@ public class A2dpProfileTest {
                 .setSampleRate(BluetoothCodecConfig.SAMPLE_RATE_96000)
                 .setCodecSpecific4(0x0a05d000L)
                 .build();
-        assertThat(A2dpProfile.getAptxAdaptiveCodecSummary(
+        assertThat(A2dpProfile.getCodecSummary(
                 RuntimeEnvironment.getApplication(), config))
                 .isEqualTo("aptX Adaptive • 96 kHz");
     }
 
     @Test
-    public void adaptiveSummary_otherCodecOrMissingConfig_isAbsent() {
+    public void codecSummary_otherCodec_usesItsReportedNameAndRate() {
         BluetoothCodecConfig config = new BluetoothCodecConfig.Builder()
-                .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX)
+                .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_LDAC)
+                .setSampleRate(BluetoothCodecConfig.SAMPLE_RATE_96000)
                 .setCodecSpecific4(0x5000L)
                 .build();
-        assertThat(A2dpProfile.getAptxAdaptiveCodecSummary(
-                RuntimeEnvironment.getApplication(), config)).isNull();
-        assertThat(A2dpProfile.getAptxAdaptiveCodecSummary(
+        assertThat(A2dpProfile.getCodecSummary(
+                RuntimeEnvironment.getApplication(), config)).isEqualTo("LDAC • 96 kHz");
+    }
+
+    @Test
+    public void codecSummary_combinedRateMask_doesNotShowASampleRate() {
+        BluetoothCodecConfig config = new BluetoothCodecConfig.Builder()
+                .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_AAC)
+                .setSampleRate(BluetoothCodecConfig.SAMPLE_RATE_44100
+                        | BluetoothCodecConfig.SAMPLE_RATE_48000)
+                .build();
+        assertThat(A2dpProfile.getCodecSummary(
+                RuntimeEnvironment.getApplication(), config)).isEqualTo("AAC");
+        assertThat(A2dpProfile.getCodecSummary(
                 RuntimeEnvironment.getApplication(), null)).isNull();
     }
 

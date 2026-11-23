@@ -396,40 +396,86 @@ public class A2dpProfile implements LocalBluetoothProfile {
 
     @Nullable
     public String getActiveCodecSummary(BluetoothDevice device) {
-        if (mService == null || device == null || !device.equals(getActiveDevice())
-                || getConnectionStatus(device) != BluetoothProfile.STATE_CONNECTED) {
+        // The Bluetooth service can disconnect while a visible summary is being refreshed.
+        try {
+            if (device == null || !device.equals(getActiveDevice())
+                    || getConnectionStatus(device) != BluetoothProfile.STATE_CONNECTED) {
+                return null;
+            }
+            BluetoothCodecStatus status = getCodecStatus(device);
+            return status == null ? null : getCodecSummary(mContext, status.getCodecConfig());
+        } catch (IllegalStateException | SecurityException e) {
             return null;
         }
-        BluetoothCodecStatus status = mService.getCodecStatus(device);
-        return status == null ? null : getAptxAdaptiveCodecSummary(mContext, status.getCodecConfig());
     }
 
     @VisibleForTesting
     @Nullable
-    static String getAptxAdaptiveCodecSummary(Context context, BluetoothCodecConfig config) {
-        if (config == null || config.getCodecType()
-                != BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_ADAPTIVE) {
+    static String getCodecSummary(Context context, @Nullable BluetoothCodecConfig config) {
+        if (config == null) {
             return null;
         }
-        int sampleRate = switch (config.getSampleRate()) {
-            case BluetoothCodecConfig.SAMPLE_RATE_44100 -> 44100;
-            case BluetoothCodecConfig.SAMPLE_RATE_48000 -> 48000;
-            case BluetoothCodecConfig.SAMPLE_RATE_96000 -> 96000;
-            default -> 0;
-        };
-        // Qualcomm's HQ + 16-bit-source profile selects CD-quality Lossless mode.
-        boolean lossless = sampleRate == 44100
-                && (config.getCodecSpecific4() & 0x7000L) == 0x5000L;
-        String codec = lossless ? context.getString(R.string.bluetooth_codec_aptx_lossless)
-                : context.getString(R.string.bluetooth_codec_aptx_adaptive);
+        String name = getReportedCodecName(context, config);
+        if (name == null) {
+            return null;
+        }
+        int sampleRate = getReportedSampleRateHz(config.getSampleRate());
         if (sampleRate == 0) {
-            return codec;
+            return name;
         }
         NumberFormat format = NumberFormat.getNumberInstance(
                 context.getResources().getConfiguration().getLocales().get(0));
         format.setMaximumFractionDigits(1);
-        return context.getString(R.string.bluetooth_codec_sample_rate, codec,
+        return context.getString(R.string.bluetooth_codec_sample_rate, name,
                 format.format(sampleRate / 1000.0));
+    }
+
+    /** Returns the display label for the active codec configuration reported by Bluetooth. */
+    @Nullable
+    public static String getReportedCodecName(Context context,
+            @Nullable BluetoothCodecConfig config) {
+        if (config != null
+                && config.getCodecType() == BluetoothCodecConfig.SOURCE_CODEC_TYPE_APTX_ADAPTIVE) {
+            // This is the reported Qualcomm profile, not a measurement of transmission quality.
+            boolean lossless = config.getSampleRate() == BluetoothCodecConfig.SAMPLE_RATE_44100
+                    && (config.getCodecSpecific4() & 0x7000L) == 0x5000L;
+            return context.getString(lossless ? R.string.bluetooth_codec_aptx_lossless
+                    : R.string.bluetooth_codec_aptx_adaptive);
+        }
+        return getCodecName(config);
+    }
+
+    /** Returns the codec family name, suitable for listing selectable capabilities as well. */
+    @Nullable
+    public static String getCodecName(@Nullable BluetoothCodecConfig config) {
+        if (config == null) {
+            return null;
+        }
+        BluetoothCodecType type = config.getExtendedCodecType();
+        String name = type == null ? null : type.getCodecName();
+        if (name == null || name.isBlank()) {
+            type = BluetoothCodecType.createFromType(config.getCodecType());
+            name = type == null ? null : type.getCodecName();
+        }
+        return name == null || name.isBlank() || name.startsWith("UNKNOWN CODEC")
+                || "INVALID CODEC".equals(name) ? null : name.trim();
+    }
+
+    /** Returns a single reported rate in hertz, or zero when the value is absent or a mask. */
+    public static int getReportedSampleRateHz(int value) {
+        return switch (value) {
+            case BluetoothCodecConfig.SAMPLE_RATE_8000 -> 8000;
+            case BluetoothCodecConfig.SAMPLE_RATE_16000 -> 16000;
+            case BluetoothCodecConfig.SAMPLE_RATE_24000 -> 24000;
+            case BluetoothCodecConfig.SAMPLE_RATE_32000 -> 32000;
+            case BluetoothCodecConfig.SAMPLE_RATE_44100 -> 44100;
+            case BluetoothCodecConfig.SAMPLE_RATE_48000 -> 48000;
+            case BluetoothCodecConfig.SAMPLE_RATE_88200 -> 88200;
+            case BluetoothCodecConfig.SAMPLE_RATE_96000 -> 96000;
+            case BluetoothCodecConfig.SAMPLE_RATE_176400 -> 176400;
+            case BluetoothCodecConfig.SAMPLE_RATE_192000 -> 192000;
+            default -> 0;
+        };
     }
 
     public String toString() {

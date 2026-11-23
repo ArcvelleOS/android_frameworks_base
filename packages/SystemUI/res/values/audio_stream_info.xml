@@ -19,6 +19,10 @@
     <!-- Output transport labels. These do not assert active sample rate or playback quality. -->
     <string name="audio_stream_info_usb_audio">USB audio</string>
     <string name="audio_stream_info_wired_audio">Wired audio</string>
+    <string name="audio_stream_info_builtin_audio">Built-in audio</string>
+    <string name="audio_stream_info_hdmi_audio">HDMI audio</string>
+    <string name="audio_stream_info_le_audio">Bluetooth LE Audio</string>
+    <string name="audio_stream_info_hearing_aid">Bluetooth hearing aid</string>
     <!-- A single sample rate reported by Bluetooth, in kilohertz. -->
     <string name="audio_stream_info_sample_rate">%1$s kHz</string>
     <!-- PCM bit depth reported in the Bluetooth codec configuration. -->
