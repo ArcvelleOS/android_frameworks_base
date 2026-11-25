@@ -1431,9 +1431,7 @@ public class PduParser {
 
                         if (index < PduContentTypes.contentTypes.length) {
                             byte[] type = (PduContentTypes.contentTypes[index]).getBytes();
-                            if (map != null) {
-                                map.put(PduPart.P_TYPE, type);
-                            }
+                            map.put(PduPart.P_TYPE, type);
                         } else {
                             //not support this type, ignore it.
                         }
@@ -1496,16 +1494,14 @@ public class PduParser {
                             (END_STRING_FLAG == firstValue)) {
                         //Text-String (extension-charset)
                         byte[] charsetStr = parseWapString(pduDataStream, TYPE_TEXT_STRING);
-                        if (charsetStr != null && map != null) {
-                            try {
-                                int charsetInt = CharacterSets.getMibEnumValue(
-                                        new String(charsetStr));
-                                map.put(PduPart.P_CHARSET, charsetInt);
-                            } catch (UnsupportedEncodingException e) {
-                                // Not a well-known charset, use "*".
-                                Log.e(LOG_TAG, Arrays.toString(charsetStr), e);
-                                map.put(PduPart.P_CHARSET, CharacterSets.ANY_CHARSET);
-                            }
+                        try {
+                            int charsetInt = CharacterSets.getMibEnumValue(
+                                    new String(charsetStr));
+                            map.put(PduPart.P_CHARSET, charsetInt);
+                        } catch (UnsupportedEncodingException e) {
+                            // Not a well-known charset, use "*".
+                            Log.e(LOG_TAG, Arrays.toString(charsetStr), e);
+                            map.put(PduPart.P_CHARSET, CharacterSets.ANY_CHARSET);
                         }
                     } else {
                         //Well-known-charset
@@ -1624,15 +1620,8 @@ public class PduParser {
         } else if (cur <= TEXT_MAX) {
             contentType = parseWapString(pduDataStream, TYPE_TEXT_STRING);
         } else {
-            // Parse the content type index from the stream (returns a value 0-127).
-            int index = parseShortInteger(pduDataStream);
-            // Ensure the index is within the bounds of the well-known content types table (0-82).
-            if (index < PduContentTypes.contentTypes.length) {
-                contentType = (PduContentTypes.contentTypes[index]).getBytes();
-            } else {
-                // Fallback to default "*/*" if the index is out of bounds to prevent AIOOBE crash.
-                contentType = (PduContentTypes.contentTypes[0]).getBytes();
-            }
+            contentType =
+                (PduContentTypes.contentTypes[parseShortInteger(pduDataStream)]).getBytes();
         }
 
         return contentType;
