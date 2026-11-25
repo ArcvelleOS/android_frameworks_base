@@ -17,6 +17,8 @@
 package com.android.systemui.navigationbar.views;
 
 import static android.app.ActivityManager.LOCK_TASK_MODE_PINNED;
+import static android.app.contextualsearch.ContextualSearchManager.ENTRYPOINT_LONG_PRESS_HOME;
+import static android.app.contextualsearch.ContextualSearchManager.FEATURE_CONTEXTUAL_SEARCH;
 import static android.app.StatusBarManager.NAVBAR_BACK_DISMISS_IME;
 import static android.app.StatusBarManager.NAVBAR_IME_SWITCHER_BUTTON_VISIBLE;
 import static android.app.StatusBarManager.NAVBAR_IME_VISIBLE;
@@ -1521,6 +1523,17 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         return false;
     }
 
+    private boolean isContextualSearchEnabled() {
+        if (!mContext.getPackageManager().hasSystemFeature(FEATURE_CONTEXTUAL_SEARCH)) {
+            return false;
+        }
+        boolean defaultEnabled = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_searchAllEntrypointsEnabledDefault);
+        return Settings.Secure.getIntForUser(mContext.getContentResolver(),
+                Settings.Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED, defaultEnabled ? 1 : 0,
+                mUserTracker.getUserId()) != 0;
+    }
+
     @VisibleForTesting
     boolean onHomeLongClick(View v) {
         if (!mView.isRecentsButtonVisible() && mScreenPinningActive) {
@@ -1535,16 +1548,38 @@ public class NavigationBar extends ViewController<NavigationBarView> implements 
         args.putInt(
                 AssistManager.INVOCATION_TYPE_KEY,
                 AssistManager.INVOCATION_TYPE_HOME_BUTTON_LONG_PRESS);
-        // If Launcher has requested to override long press home, add a delay for the ripple.
-        // TODO(b/304146255): Remove this delay once we can exclude 3-button nav from screenshot.
-        boolean delayAssistInvocation = mAssistManagerLazy.get().shouldOverrideAssist(
-                AssistManager.INVOCATION_TYPE_HOME_BUTTON_LONG_PRESS);
-        // In practice, I think v should always be a KeyButtonView, but just being safe.
-        if (delayAssistInvocation && v instanceof KeyButtonView) {
-            ((KeyButtonView) v).setOnRippleInvisibleRunnable(
-                    () -> mAssistManagerLazy.get().startAssist(args));
+        if (isContextualSearchEnabled() && mLauncherProxyService.getProxy() != null) {
+            Runnable invokeContextualSearch = () -> {
+                if (mLauncherProxyService.getProxy() == null) {
+                    mAssistManagerLazy.get().startAssist(args);
+                    return;
+                }
+                try {
+                    mLauncherProxyService.getProxy().invokeContextualSearch(
+                            ENTRYPOINT_LONG_PRESS_HOME, null);
+                } catch (RemoteException e) {
+                    Log.w(TAG, "Unable to invoke contextual search from Home button", e);
+                    mAssistManagerLazy.get().startAssist(args);
+                }
+            };
+            // Keep the navigation bar out of the screenshot captured by Contextual Search.
+            if (v instanceof KeyButtonView) {
+                ((KeyButtonView) v).setOnRippleInvisibleRunnable(invokeContextualSearch);
+            } else {
+                invokeContextualSearch.run();
+            }
         } else {
-            mAssistManagerLazy.get().startAssist(args);
+            // If Launcher has requested to override long press home, add a delay for the ripple.
+            // TODO(b/304146255): Remove this delay once we can exclude 3-button nav from screenshot.
+            boolean delayAssistInvocation = mAssistManagerLazy.get().shouldOverrideAssist(
+                    AssistManager.INVOCATION_TYPE_HOME_BUTTON_LONG_PRESS);
+            // In practice, I think v should always be a KeyButtonView, but just being safe.
+            if (delayAssistInvocation && v instanceof KeyButtonView) {
+                ((KeyButtonView) v).setOnRippleInvisibleRunnable(
+                        () -> mAssistManagerLazy.get().startAssist(args));
+            } else {
+                mAssistManagerLazy.get().startAssist(args);
+            }
         }
         mCentralSurfacesOptionalLazy.get().ifPresent(CentralSurfaces::awakenDreams);
         mView.abortCurrentGesture();

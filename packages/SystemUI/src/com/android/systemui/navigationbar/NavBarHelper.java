@@ -16,6 +16,7 @@
 
 package com.android.systemui.navigationbar;
 
+import static android.app.contextualsearch.ContextualSearchManager.FEATURE_CONTEXTUAL_SEARCH;
 import static android.app.StatusBarManager.WINDOW_NAVIGATION_BAR;
 import static android.app.StatusBarManager.WindowVisibleState;
 import static android.provider.Settings.Secure.ACCESSIBILITY_BUTTON_MODE_NAVIGATION_BAR;
@@ -497,13 +498,22 @@ public final class NavBarHelper implements
 
         boolean overrideLongPressHome = mAssistManagerLazy.get()
                 .shouldOverrideAssist(AssistManager.INVOCATION_TYPE_HOME_BUTTON_LONG_PRESS);
-        boolean longPressDefault = mContext.getResources().getBoolean(overrideLongPressHome
-                ? com.android.internal.R.bool.config_searchAllEntrypointsEnabledDefault
-                : com.android.internal.R.bool.config_assistLongPressHomeEnabledDefault);
-        mLongPressHomeEnabled = Settings.Secure.getIntForUser(mContentResolver,
-                overrideLongPressHome ? Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED
-                        : Settings.Secure.ASSIST_LONG_PRESS_HOME_ENABLED, longPressDefault ? 1 : 0,
+        boolean contextualSearchAvailable = mContext.getPackageManager()
+                .hasSystemFeature(FEATURE_CONTEXTUAL_SEARCH);
+        boolean searchAllDefault = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_searchAllEntrypointsEnabledDefault);
+        boolean searchAllEntrypointsEnabled = Settings.Secure.getIntForUser(mContentResolver,
+                Secure.SEARCH_ALL_ENTRYPOINTS_ENABLED, searchAllDefault ? 1 : 0,
                 mUserTracker.getUserId()) != 0;
+        boolean assistLongPressDefault = mContext.getResources().getBoolean(
+                com.android.internal.R.bool.config_assistLongPressHomeEnabledDefault);
+        boolean assistLongPressHomeEnabled = Settings.Secure.getIntForUser(mContentResolver,
+                Settings.Secure.ASSIST_LONG_PRESS_HOME_ENABLED, assistLongPressDefault ? 1 : 0,
+                mUserTracker.getUserId()) != 0;
+        mLongPressHomeEnabled = overrideLongPressHome
+                ? searchAllEntrypointsEnabled
+                : (contextualSearchAvailable && searchAllEntrypointsEnabled)
+                        || assistLongPressHomeEnabled;
 
         boolean gestureDefault = mContext.getResources().getBoolean(
                 com.android.internal.R.bool.config_assistTouchGestureEnabledDefault);
